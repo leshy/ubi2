@@ -1,6 +1,6 @@
 require! {
   xmlrpc
-  lodash: { map, keys, mapValues, assign }
+  lodash: { map, keys, mapValues, assign, values }
   bluebird: p
   events: { EventEmitter }
 }
@@ -30,16 +30,16 @@ class Node extends EventEmitter
     
     @parent.ubi 'new_edge', @id, node.id
     .then (edgeId) ~> @parent.ubi 'change_edge_style', edgeId, @parent.edgeStyle[style]
-    .then ~>
-      @listenConnection node
-      node.listenConnection @
+  #   .then ~>
+  #     @listenConnection node
+  #     node.listenConnection @
 
-  listenConnection: (node) ->
-    @connections += 1
-    node.once 'remove', ~>
-      console.log @name, @connections
-      @connections -= 1
-      if not @connections then @remove()
+  # listenConnection: (node) ->
+  #   @connections += 1
+  #   node.once 'remove', ~>
+  #     console.log @name, @connections
+  #     @connections -= 1
+  #     if not @connections then @remove()
   
   remove: -> 
     @parent.ubi 'remove_vertex', @id
@@ -59,28 +59,45 @@ module.exports = class ubigraph
     @client = xmlrpc.createClient host: 'localhost', port: 20738, path: '/RPC2'
     
   start: ->
+    styles = do
+      node:
+        default:
+          shape: 'dodecahedron'
+          size: '1.0'
+          fontcolor: '#AFAFAF'
+          fontfamily: 'Terminus'
+          fontsize: '12'
+          color: '#405c71'
+          
+        green:
+          color: '#467140'
+          
+        red:
+          color: '#931416'
 
-    defaultStyle = do
-      shape: 'dodecahedron'
-      size: '1.0'
-      fontcolor: '#AFAFAF'
-      fontfamily: 'Terminus'
-      fontsize: '12'
-      color: '#405c71'
-
-    defaultEdgeStyle = do
-      spline: "true"
-      color: "#778877"
-#      visible: "false"
-#      arrow: "true"
-#      arrow_radius: "0.4"
-#      arrow_length: "2.0"
-      strength: "0.1"
-      fontfamily: "Fixed"
+      edge:
       
+        default:
+          spline: "true"
+          color: "#778877"
+          strength: "0.1"
+          fontfamily: "Fixed"
+        
+        red:
+          spline: "false"
+          strength: "0.001"
+          color: "#931416"
+          
+        gray:
+          spline: "false"
+          strength: "0.001"
+          color: "#5E5E5E"
+
     @ubi 'clear'
-    .then ~> @addStyle "default", defaultStyle
-    .then ~> @addEdgeStyle "default", defaultEdgeStyle
+    .then ~>
+      p.mapSeries map(styles.node, (style, name) ~> ~> @addStyle name, style), -> it()
+    .then ~>
+      p.mapSeries map(styles.edge, (style, name) ~> ~> @addEdgeStyle name, style), -> it()
 
   node: (opts) ->
     if node = @nodes[ opts.name ] then return new p (resolve,reject) ~> resolve assign node, opts
@@ -99,11 +116,10 @@ module.exports = class ubigraph
       .then ~> @style[ name ] = id
 
   addEdgeStyle: (name, style) ~>
-    styleId = keys(@edgeStyle).length
-    @ubi 'new_edge_style', styleId
-    .then (ubiStyleId) ~>
-      p.props mapValues style, (value, key) ~> @ubi 'set_edge_style_attribute', styleId, key, value
-    .then ~> @edgeStyle[ name ] = styleId
+    @ubi 'new_edge_style', (@edgeStyle.default or 0)
+    .then (id) ~>
+      p.props mapValues style, (value, key) ~> @ubi 'set_edge_style_attribute', id, key, value
+      .then ~> @edgeStyle[ name ] = id
 
   addNode: (name,style="default") ->
     @node name: name, style: style
