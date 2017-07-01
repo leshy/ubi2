@@ -1,11 +1,9 @@
 require! {
   xmlrpc
-  lodash: { map, keys, mapValues }
+  lodash: { map, keys, mapValues, assign }
   bluebird: p
   events: { EventEmitter }
 }
-
-
 
 class Node extends EventEmitter
   (opts) ->
@@ -20,9 +18,13 @@ class Node extends EventEmitter
     .then (nodeId) ~>
       @id = nodeId
       @parent.ubi 'change_vertex_style', nodeId, @parent.style[ @style or "default" ]
-      .then ~> @parent.ubi 'set_vertex_attribute', nodeId,'label', String @name
+      .then ~> @parent.ubi 'set_vertex_attribute', nodeId,'label', String (@label or @name)
       .then ~> @parent.nodes[ @name ] = @
-          
+
+  changeStyle: ->
+    @parent.ubi 'change_vertex_style', @id, @parent.style[ @style or "default" ]
+    .then ~> @parent.ubi 'set_vertex_attribute', @id,'label', String (@label or @name)
+                              
   connect: (node, style="default") ->
     if node?@@ is String then node = @parent.nodes[ node ]
     
@@ -38,8 +40,6 @@ class Node extends EventEmitter
       console.log @name, @connections
       @connections -= 1
       if not @connections then @remove()
-    
-
   
   remove: -> 
     @parent.ubi 'remove_vertex', @id
@@ -75,7 +75,7 @@ module.exports = class ubigraph
 #      arrow: "true"
 #      arrow_radius: "0.4"
 #      arrow_length: "2.0"
-      strength: "0.01"
+      strength: "0.1"
       fontfamily: "Fixed"
       
     @ubi 'clear'
@@ -83,6 +83,7 @@ module.exports = class ubigraph
     .then ~> @addEdgeStyle "default", defaultEdgeStyle
 
   node: (opts) ->
+    if node = @nodes[ opts.name ] then return new p (resolve,reject) ~> resolve assign node, opts
     n = new Node (parent: @) <<< opts
     n.render()
 
